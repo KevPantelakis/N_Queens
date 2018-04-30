@@ -1,14 +1,10 @@
-#include <stdio.h>
-#include <tchar.h>
 #include <iostream>
 #include <time.h> 
-#include <windows.h>
 #include <string>
 #include <vector>
 #include <list>
 #include <chrono>
 #include <thread>  
-
 #include "Board.h"
 
 using namespace std;
@@ -20,6 +16,7 @@ int rand_in_range(int min, int max) {
 }
 
 bool BacktrackQueen(Board &chessBoard, int startCol) {
+	// If chessboard already filled, no job to do here. 
 	if (startCol >= chessBoard.size) { 
 		return true; 
 	}
@@ -27,61 +24,45 @@ bool BacktrackQueen(Board &chessBoard, int startCol) {
 		if (chessBoard.InsertQueen(startCol, i)) {
 			if (BacktrackQueen(chessBoard, startCol + 1))
 				return true;
-			// On n'a pas pu placer toutes les reines, on backtrack
+			// Could not place all queens Backtrack
 			chessBoard.RemoveQueen(startCol, i);
 		}
 	}
-	//Aucun placement possible pour la configuration initiale donnée
+	//No solution found for given initial board
 	return false;
 }
 
-bool PureLasVegasQueen(Board &chessBoard, int k = 0) {
+bool LasVegasQueen(Board &chessBoard, int k) {
 	int currentCol = 0;
 	list<int> initialPossibleColumnIndex;
 	list<int> possibleColIndex;
+
 	for (int i = 0; i < chessBoard.size; ++i)
 		initialPossibleColumnIndex.push_back(i);
-	possibleColIndex = list<int>(initialPossibleColumnIndex);
-	while (currentCol != chessBoard.size) {
-		int rowIndex = *next(possibleColIndex.begin(), rand() % possibleColIndex.size());
-		possibleColIndex.remove(rowIndex);
-		if (chessBoard.InsertQueen(currentCol,rowIndex)) {
-			currentCol++;
-			possibleColIndex = list<int>(initialPossibleColumnIndex);
-		}
-		else if (possibleColIndex.size() == 0) {
-			chessBoard = Board(chessBoard.size);
-			currentCol = 0;
-			possibleColIndex = list<int>(initialPossibleColumnIndex);
-		}		
-	}
-	return true;
-}
+	
+	possibleColIndex = (initialPossibleColumnIndex);
 
-bool MutatedLasVegasQueen(Board &chessBoard, int k) {
-	int currentCol = 0;
-	list<int> initialPossibleColumnIndex;
-	list<int> possibleColIndex;
-	for (int i = 0; i < chessBoard.size; ++i)
-		initialPossibleColumnIndex.push_back(i);
-	possibleColIndex = list<int>(initialPossibleColumnIndex);
-
-	// Remplir les premieres k reines avec l'algo LasVegas
+	// Fill the first k columns with LasVegas algorithm
 	while (currentCol != k) {
+		// Get a random row index to try inserting a queen and remove it from the list 
+		// to prevent re-using it if insertion wasn't valid.
 		int rowIndex = *next(possibleColIndex.begin(), rand() % possibleColIndex.size());
 		possibleColIndex.remove(rowIndex);
+
 		if (chessBoard.InsertQueen(currentCol, rowIndex)) {
+			// Queen succesfully inserted continue with next column.
 			currentCol++;
-			possibleColIndex = list<int>(initialPossibleColumnIndex);
+			possibleColIndex = (initialPossibleColumnIndex);
 		}
 		else if (possibleColIndex.size() == 0) {
+			// Tried all possibilities for current column restarting the fill from scratch.
 			chessBoard = Board(chessBoard.size);
 			currentCol = 0;
-			possibleColIndex = list<int>(initialPossibleColumnIndex);
+			possibleColIndex = (initialPossibleColumnIndex);
 		}
 	}
 
-	// Remplir le reste avec l'algo BackTrack
+	// Fill the rest with backtracking alrogithm
 	return BacktrackQueen(chessBoard, k);
 }
 
@@ -92,14 +73,24 @@ void run(Algo algo, Board board, int k, string algoName, bool printResult, bool 
 		cout << "No solution for board size " << board.size << "X" << board.size << ". Use a board size 4 or larger" << endl;
 		return;
 	}
+
 	bool result;
+
 	auto start = steady_clock::now();
-	result = algo(board, k);
+	if (algoName == "BackVegas") {
+		do {
+			result = algo(board, k);
+		} while (!result);
+	}
+	else {
+		result = algo(board, k);
+	}	
 	auto end = steady_clock::now();
-	duration<double> elapsedSeconds = (end-start);
+
 	if (printTime) {
-		if (algoName == "Mutated LasVegas")
-			cout << "Time for Mutated LasVegas with board size " << board.size << " and LasVegas Fill " << k << ": " << fixed << elapsedSeconds.count() << endl;
+		duration<double> elapsedSeconds = (end - start);
+		if (algoName == "BackVegas")
+			cout << "Time for BackVegas with board size " << board.size << " and LasVegas Fill " << k << ": " << fixed << elapsedSeconds.count() << endl;
 		else
 			cout << "Time for " << algoName << " with board size " << board.size << ": " << fixed << elapsedSeconds.count() << endl;
 	}
@@ -112,8 +103,8 @@ void run(Algo algo, Board board, int k, string algoName, bool printResult, bool 
 int main()
 {
 	srand(time(NULL));	
-	thread PLV(run, PureLasVegasQueen, Board(60), 0, "Pure LasVegas", false, true);
-	thread MLV(run, MutatedLasVegasQueen, Board(60), 50, "Mutated LasVegas", false, true);
+	thread PLV(run, LasVegasQueen, Board(60), 60, "Pure LasVegas", false, true);
+	thread MLV(run, LasVegasQueen, Board(60), 50, "BackVegas", false, true);
 	thread PBack(run, BacktrackQueen, Board(20), 0, "Pure BackTrack", false, true);
 	PLV.join();
 	MLV.join();
